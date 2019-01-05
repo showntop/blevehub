@@ -1,6 +1,7 @@
 package hub
 
 import (
+	"encoding/json"
 	"fmt"
 	"hash/fnv"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/blevesearch/bleve"
+	"github.com/blevesearch/bleve/search/query"
 )
 
 type Document interface {
@@ -52,21 +54,54 @@ func (h *Hub) IndexBatch(documents []Document) error {
 	return nil
 }
 
-func (h *Hub) Search(q string) (*bleve.SearchResult, error) {
-	query := bleve.NewQueryStringQuery(q)
-	searchRequest := bleve.NewSearchRequest(query)
-	// searchRequest.Size = maxSearchHitSize
-	searchResults, err := h.alias.Search(searchRequest)
+func (h *Hub) Count() (uint64, error) {
+	return h.alias.DocCount()
+}
+
+func (h *Hub) Search(rawReq []byte) (*bleve.SearchResult, error) {
+	var searchRequest bleve.SearchRequest
+	err := json.Unmarshal(rawReq, &searchRequest)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error parsing query: %v", err)
 	}
-	return searchResults, nil
+
+	if srqv, ok := searchRequest.Query.(query.ValidatableQuery); ok {
+		err = srqv.Validate()
+		if err != nil {
+			return nil, fmt.Errorf("error validating query: %v", err)
+		}
+	}
+
+	// execute the query
+	searchResponse, err := h.alias.Search(&searchRequest)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query: %v", err)
+	}
+	return searchResponse, nil
 	// docIDs := make(DocIDs, 0, len(searchResults.Hits))
 	// for _, d := range searchResults.Hits {
 	// 	docIDs = append(docIDs, DocID(d.ID))
 	// }
 	// sort.Sort(docIDs)
 	// return docIDs, nil
+}
+
+func (h *Hub) ForTest() {
+	fields, _ := h.shards[0].idx.Fields()
+	fmt.Println(fields)
+
+	dict, _ := h.shards[0].idx.FieldDict("Body")
+	// x, _ := dict.Next()
+	for {
+		x, err := dict.Next()
+		if err != nil {
+			fmt.Println(err)
+			break
+		}
+		_ = x
+		fmt.Printf("%+v", x)
+	}
+
 }
 
 func NewHub(path string, name string, numShards int) (*Hub, error) {
@@ -76,16 +111,10 @@ func NewHub(path string, name string, numShards int) (*Hub, error) {
 	// if numShards > maxShardCount {
 	// 	return nil, fmt.Errorf("requested shard count exceeds maximum of %d", maxShardCount)
 	// }
-
+	os.RemoveAll(indexPath)
 	// Create the directory for the index, if it doesn't already exist.
-	fmt.Println(indexPath)
-	f, er := os.Stat(indexPath)
-	_ = f
-	fmt.Println("xx", "", ",", er)
 	if _, err := os.Stat(indexPath); err != nil && os.IsExist(err) {
 		return nil, fmt.Errorf("index already exists at %s", indexPath)
-	} else if err != nil && os.IsNotExist(err) {
-		return nil, fmt.Errorf(" %s", err)
 	}
 	if err := os.MkdirAll(indexPath, 0755); err != nil {
 		return nil, err
