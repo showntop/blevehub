@@ -28,7 +28,7 @@ func (s *Shard) Open() error {
 	if err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to check existence of shard")
 	} else if os.IsNotExist(err) {
-		mapping, err := mapping2()
+		mapping, err := mapping3()
 		if err != nil {
 			return err
 		}

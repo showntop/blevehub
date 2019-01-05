@@ -44,6 +44,7 @@ var nShards = flag.Int("shards", 2, "number of indexing shards")
 // var maxprocs = flag.Int("maxprocs", 16, "GOMAXPROCS")
 var indexPath = flag.String("index", "indexes", "index storage path")
 var docsPath = flag.String("docs", "./data/aaaa.csv", "path to docs file")
+
 var csv = flag.Bool("csv", true, "summary CSV output")
 
 func main() {
@@ -81,7 +82,7 @@ func main() {
 
 	log.Println("start")
 	stime := time.Now()
-	myhub, err := hub.NewHub("./indexes", "testhub", 5)
+	myhub, err := hub.NewHub(*indexPath, "testhub", *nShards)
 	if err != nil {
 		log.Println(err)
 	}
