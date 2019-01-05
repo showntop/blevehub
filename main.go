@@ -48,6 +48,7 @@ var docsPath = flag.String("docs", "./data/aaaa.csv", "path to docs file")
 var csv = flag.Bool("csv", true, "summary CSV output")
 
 func main() {
+	log.SetOutput(os.Stdout)
 	go func() {
 		log.Println(http.ListenAndServe(":6060", nil))
 	}()
