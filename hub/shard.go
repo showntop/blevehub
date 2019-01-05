@@ -12,14 +12,23 @@ import (
 	"github.com/yanyiwu/gojieba"
 )
 
+const (
+	defaultBatchSize = 100
+)
+
 type Shard struct {
-	path string
-	idx  bleve.Index
+	batchSize int
+	path      string
+	idx       bleve.Index
 }
 
-func NewShard(path string) *Shard {
+func NewShard(path string, bs int) *Shard {
+	if bs <= 1 {
+		bs = defaultBatchSize
+	}
 	return &Shard{
-		path: path,
+		path:      path,
+		batchSize: bs,
 	}
 }
 
@@ -56,23 +65,22 @@ func (s *Shard) Index(document Document) error {
 
 func (s *Shard) IndexBatch(documents []Document) error {
 
-	batchSize := 500
+	// batchSize := 50
 	// batchNum := len(documents) / batchSize
 	// if len(documents)%batchSize != 0 {
 	// 	batchNum += 1
 	// }
-
 	batch := s.idx.NewBatch()
-	for i, d := range documents {
-		if i%batchSize == 0 || i == len(documents)-1 {
+
+	for i := 0; i < len(documents); i++ {
+		if err := batch.Index(string(documents[i].ID()), documents[i].Data()); err != nil {
+			return err // XXX return errors en-masse
+		}
+		if (i != 0 && i%s.batchSize == 0) || i == len(documents)-1 {
 			if err := s.idx.Batch(batch); err != nil {
 				return err
 			}
 			batch = s.idx.NewBatch()
-		} else {
-			if err := batch.Index(string(d.ID()), d.Data()); err != nil {
-				return err // XXX return errors en-masse
-			}
 		}
 		// batch.SetInternal([]byte(d.ID()), d.Source())
 	}

@@ -104,7 +104,7 @@ func (h *Hub) ForTest() {
 
 }
 
-func NewHub(path string, name string, numShards int) (*Hub, error) {
+func NewHub(path string, name string, numShards int, batchSize int) (*Hub, error) {
 	indexName := name
 	indexPath := filepath.Join(path, indexName)
 
@@ -123,7 +123,7 @@ func NewHub(path string, name string, numShards int) (*Hub, error) {
 	// Create the shards.
 	shards := make([]*Shard, 0, numShards)
 	for n := 0; n < numShards; n++ {
-		s := NewShard(filepath.Join(indexPath, fmt.Sprintf("%04d", n)))
+		s := NewShard(filepath.Join(indexPath, fmt.Sprintf("%04d", n)), batchSize)
 		if err := s.Open(); err != nil {
 			return nil, err
 		}
@@ -144,7 +144,7 @@ func NewHub(path string, name string, numShards int) (*Hub, error) {
 }
 
 // OpenHub opens an existing index, at the given path.
-func OpenHub(path string) (*Hub, error) {
+func OpenHub(path string, batchSize int) (*Hub, error) {
 	fi, err := os.Stat(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to access hub at %s", path)
@@ -161,7 +161,7 @@ func OpenHub(path string) (*Hub, error) {
 
 	shards := make([]*Shard, 0)
 	for _, name := range names {
-		s := NewShard(filepath.Join(path, name))
+		s := NewShard(filepath.Join(path, name), batchSize)
 		if err := s.Open(); err != nil {
 			return nil, fmt.Errorf("shard open fail: %s", err.Error())
 		}

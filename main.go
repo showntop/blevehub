@@ -8,8 +8,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	_ "net/http/pprof"
+	"runtime/pprof"
+	// _ "net/http/pprof"
 	"os"
+	"runtime"
 	"time"
 
 	"blevehub/hub"
@@ -40,6 +42,8 @@ func (m *mydoc) Source() []byte {
 var addr = flag.String("addr", ":8094", "server addr")
 var batchSize = flag.Int("batchSize", 100, "batch size for indexing")
 var nShards = flag.Int("shards", 2, "number of indexing shards")
+var cpuprofile = flag.String("cpuprofile", "./log/cupprofile", "write cpu profile to file")
+var memprofile = flag.String("memprofile", "./log/memprofile", "write mem profile to file")
 
 // var maxprocs = flag.Int("maxprocs", 16, "GOMAXPROCS")
 var indexPath = flag.String("index", "indexes", "index storage path")
@@ -49,11 +53,19 @@ var csv = flag.Bool("csv", true, "summary CSV output")
 
 func main() {
 	log.SetOutput(os.Stdout)
-	go func() {
-		log.Println(http.ListenAndServe(":6060", nil))
-	}()
+	// go func() {
+	// 	log.Println(http.ListenAndServe(":6060", nil))
+	// }()
 
 	flag.Parse()
+
+	if *cpuprofile != "" {
+		f, err := os.Create(*cpuprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.StartCPUProfile(f)
+	}
 
 	f, err := os.Open(*docsPath)
 	if err != nil {
@@ -81,17 +93,29 @@ func main() {
 		})
 	}
 
-	log.Println("start")
-	stime := time.Now()
-	myhub, err := hub.NewHub(*indexPath, "testhub", *nShards)
+	log.Printf("start with GOMAXPROCS:%d and %d shards(batch size: %d), total docs:%d\r\n", runtime.GOMAXPROCS(-1), *nShards, *batchSize, len(docs))
+
+	stime1 := time.Now()
+	myhub, err := hub.NewHub(*indexPath, "testhub", *nShards, *batchSize)
 	if err != nil {
 		log.Println(err)
 	}
+	log.Printf("new hub use %s\r\n", time.Now().Sub(stime1))
+	stime := time.Now()
 
 	myhub.IndexBatch(docs)
-	log.Println("end index")
 	// myhub.ForTest()
-	log.Println("build index use ", time.Now().Sub(stime))
+	pprof.StopCPUProfile()
+	if *memprofile != "" {
+		f, err := os.Create(*memprofile)
+		if err != nil {
+			log.Fatal(err)
+		}
+		pprof.WriteHeapProfile(f)
+		f.Close()
+	}
+	x, _ := myhub.Count()
+	log.Printf("build %d index finish, use %s \r\n", x, time.Now().Sub(stime))
 
 	http.HandleFunc("/api/search", xxx(myhub))
 	http.HandleFunc("/api/count", xxx2(myhub))
@@ -108,7 +132,7 @@ func xxx2(h *hub.Hub) http.HandlerFunc {
 			return
 		}
 		w.Write([]byte(fmt.Sprint(x)))
-		log.Println("%s used ", req.RequestURI, time.Now().Sub(stime))
+		log.Printf("%s used %s \r\n", req.RequestURI, time.Now().Sub(stime))
 	}
 }
 
